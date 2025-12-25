@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - OVS</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        .login-tabs {
+            display: flex;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 1rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab-btn.active {
+            color: white;
+            border-bottom-color: var(--primary);
+            font-weight: 600;
+        }
+
+        .tab-btn:hover:not(.active) {
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <nav>
+        <div class="brand" onclick="window.location.href='index.html'">OVS</div>
+        <div class="nav-links">
+            <button onclick="window.location.href='register.html'">New? Create Account</button>
+        </div>
+    </nav>
+
+    <div class="container animate-fade-in" style="max-width: 500px;">
+        <div class="glass-panel" style="padding: 2.5rem;">
+
+            <div class="login-tabs">
+                <button id="tab-voter" class="tab-btn active">Voter Login</button>
+                <button id="tab-admin" class="tab-btn">Admin Login</button>
+            </div>
+
+            <h2 id="login-title" style="margin-bottom: 1.5rem; text-align: center; font-family: var(--font-heading);">
+                Welcome Back</h2>
+
+            <form id="login-form" autocomplete="off">
+                <div class="form-group">
+                    <label id="reg-label">Registration Number</label>
+                    <input type="text" id="regNum" required placeholder="Enter ID" autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" required placeholder="Enter Password"
+                        autocomplete="new-password">
+                </div>
+
+                <button type="submit" class="submit-btn" id="login-btn">Secure Login</button>
+            </form>
+            <p id="error-msg" class="text-danger text-center mt-4 hidden"
+                style="background: rgba(239,68,68,0.1); padding: 0.5rem; border-radius: 8px;"></p>
+        </div>
+    </div>
+
+    <script src="storage.js"></script>
+    <script>
+        const form = document.getElementById('login-form');
+        const tabVoter = document.getElementById('tab-voter');
+        const tabAdmin = document.getElementById('tab-admin');
+        const loginTitle = document.getElementById('login-title');
+        const regInput = document.getElementById('regNum');
+        const passInput = document.getElementById('password');
+        const regLabel = document.getElementById('reg-label');
+
+        // Check URL params for auto-switching to admin
+        const urlParams = new URLSearchParams(window.location.search);
+        let isVoter = urlParams.get('admin') !== 'true';
+
+        // --- VALIDATION & UI LOGIC ---
+        function updateTabs() {
+            // Clear inputs
+            regInput.value = '';
+            passInput.value = '';
+            document.getElementById('error-msg').classList.add('hidden');
+
+            if (isVoter) {
+                tabVoter.classList.add('active');
+                tabAdmin.classList.remove('active');
+                loginTitle.innerText = 'Voter Login';
+                regLabel.innerText = 'Registration Number';
+                regInput.placeholder = "Enter Voter ID";
+                // Voter: RegNum is Alphanumeric, Pass is Numbers only (as per Register) - but let's be loose here to avoid lockouts, checking Server side mostly.
+                // However, user asked for "length of password is 10 numbers only" in general. 
+                // Let's enforce input masking for better UX.
+            } else {
+                tabAdmin.classList.add('active');
+                tabVoter.classList.remove('active');
+                loginTitle.innerText = 'Admin Login';
+                regLabel.innerText = 'Admin ID';
+                regInput.placeholder = "Enter Admin ID";
+            }
+        }
+
+        // Init
+        updateTabs();
+
+        tabVoter.addEventListener('click', () => { isVoter = true; updateTabs(); });
+        tabAdmin.addEventListener('click', () => { isVoter = false; updateTabs(); });
+
+        // Input Constraints
+        // Input Constraints
+        regInput.addEventListener('input', function (e) {
+            if (isVoter) {
+                // Voter: Capital Alphanumeric ONLY
+                this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            } else {
+                // Admin: Alphanumeric + Spaces. No leading space.
+                // "admin id should have small and capital alphabets and numbers... we can use space when ever we want"
+                // "starting of admin id we cannot use spaces"
+
+                // 1. Remove invalid chars (keep a-z, A-Z, 0-9, space)
+                let val = this.value.replace(/[^a-zA-Z0-9 ]/g, '');
+
+                // 2. Remove leading space
+                if (val.startsWith(' ')) val = val.trimStart();
+
+                this.value = val;
+            }
+            if (this.value.length > 20) this.value = this.value.slice(0, 20); // Increased limit for admin names with spaces
+        });
+
+        passInput.addEventListener('input', function (e) {
+            if (isVoter) {
+                // Voter: Numbers only (as per previous logic/user request)
+                this.value = this.value.replace(/[^0-9]/g, '');
+            } else {
+                // Admin: Small and Capital letters and Numbers ONLY. No space.
+                this.value = this.value.replace(/[^a-zA-Z0-9]/g, '');
+            }
+            if (this.value.length > 10) this.value = this.value.slice(0, 10);
+        });
+
+
+        // --- SUBMIT HANDLING ---
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const regNum = regInput.value;
+            const password = passInput.value;
+            const errorMsg = document.getElementById('error-msg');
+            const submitBtn = document.getElementById('login-btn');
+
+            if (regNum.length > 20) return showError("ID Max 20 Characters.");
+            if (password.length > 10) return showError("Password Max 10 Characters."); // Strict check
+
+            errorMsg.classList.add('hidden');
+            submitBtn.innerText = "Verifying...";
+            submitBtn.disabled = true;
+
+            try {
+                const user = await StorageManager.login(regNum, password);
+
+                if (user) {
+                    // Role Check
+                    if (isVoter && user.role === 'admin') {
+                        showError("Please use Admin Login tab.");
+                        submitBtn.innerText = "Secure Login"; submitBtn.disabled = false;
+                        return;
+                    }
+                    if (!isVoter && user.role !== 'admin') {
+                        showError("Access Denied. Admins only.");
+                        submitBtn.innerText = "Secure Login"; submitBtn.disabled = false;
+                        return;
+                    }
+
+                    // Status Check (New)
+                    // If status is undefined, assume 'active' for legacy users or auto-migrated ones.
+                    // If status is 'pending', deny.
+                    // If status is 'rejected', deny.
+                    if (user.role !== 'admin' && user.status === 'pending') {
+                        showError("Account Pending Approval. Please contact Admin.");
+                        submitBtn.innerText = "Secure Login"; submitBtn.disabled = false;
+                        return;
+                    }
+
+                    if (user.status === 'rejected') {
+                        showError("Registration Rejected. Please register again.");
+                        // Optional: Delete them? For now just deny.
+                        submitBtn.innerText = "Secure Login"; submitBtn.disabled = false;
+                        return;
+                    }
+
+                    // Success Redirect
+                    if (user.role === 'admin') window.location.href = 'admin_dashboard.html';
+                    else window.location.href = 'voter_dashboard.html';
+
+                } else {
+                    showError("Invalid credentials found.");
+                    submitBtn.innerText = "Secure Login"; submitBtn.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                showError("Connection Error: " + err.message);
+                submitBtn.innerText = "Secure Login"; submitBtn.disabled = false;
+            }
+        });
+
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            el.innerText = msg;
+            el.classList.remove('hidden');
+        }
+    </script>
+</body>
+
+</html>

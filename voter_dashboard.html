@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voter Dashboard - OVS</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <script src="storage.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        .candidate-card {
+            border: 1px solid var(--glass-border);
+            padding: 2rem;
+            border-radius: 16px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.03);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .candidate-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .candidate-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--glass-highlight);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+        }
+
+        .candidate-card:hover::before {
+            opacity: 1;
+        }
+
+        .candidate-card.selected {
+            border-color: var(--primary);
+            background: rgba(79, 70, 229, 0.15);
+            box-shadow: 0 0 0 2px var(--primary);
+        }
+
+        .symbol {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.2));
+        }
+
+        /* Modal for Confirmation */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .modal.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            transform: scale(0.9);
+            transition: transform 0.3s;
+        }
+
+        .modal.visible .modal-content {
+            transform: scale(1);
+        }
+    </style>
+</head>
+
+<body>
+    <nav>
+        <div class="brand">OVS</div>
+        <div class="nav-links">
+            <span id="user-name" style="margin-right: 1rem; color: var(--text-muted);">Welcome</span>
+            <button onclick="StorageManager.logout(); window.location.href='index.html'">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container animate-fade-in" style="max-width: 1000px;">
+
+        <!-- Status Banner -->
+        <div class="glass-panel text-center" style="padding: 3rem; margin-bottom: 2rem;">
+            <h2 id="election-status-header"
+                style="margin-bottom: 0.5rem; font-family: var(--font-heading); font-size: 2rem;">checking...</h2>
+            <p id="election-status-desc" class="text-muted">Connecting to election server...</p>
+
+            <!-- Winner banner removed per privacy request -->
+        </div>
+
+        <!-- Voting Section -->
+        <div id="voting-section" class="hidden animate-fade-in">
+            <h3 style="margin-bottom: 1.5rem; color: var(--text-muted); font-weight: 500;">Select your candidate</h3>
+            <div class="dashboard-grid" id="candidates-grid">
+                <!-- Populated by JS -->
+            </div>
+
+            <div class="text-center mt-4" style="height: 80px;"> <!-- fixed height to prevent jump -->
+                <button id="vote-btn" class="submit-btn hidden animate-fade-in"
+                    style="width: auto; padding: 1rem 4rem; font-size: 1.1rem; border-radius: 99px; box-shadow: 0 4px 20px rgba(79,70,229,0.4);">
+                    Review & Cast Vote
+                </button>
+            </div>
+        </div>
+
+        <!-- Already Voted View -->
+        <div id="voted-section" class="glass-panel text-center hidden animate-fade-in" style="padding: 4rem 2rem;">
+            <div style="font-size: 5rem; margin-bottom: 1.5rem; filter: drop-shadow(0 0 20px rgba(16,185,129,0.4));">✅
+            </div>
+            <h2 style="font-size: 2.5rem; margin-bottom: 1rem;">Vote Recorded Successfully</h2>
+            <p class="text-muted">Your voice has been counted.</p>
+            <p class="mt-4"
+                style="font-size: 1.2rem; background: rgba(255,255,255,0.05); display: inline-block; padding: 1rem 2rem; border-radius: 99px;">
+                You voted for: <span id="voted-candidate-name" style="font-weight: 700; color: var(--primary);"></span>
+            </p>
+        </div>
+
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="glass-panel modal-content" style="width: 90%; max-width: 450px; padding: 2.5rem;">
+            <h3 style="margin-bottom: 1.5rem; text-align: center; font-family: var(--font-heading);">Confirm Your Vote
+            </h3>
+
+            <div
+                style="text-align: center; margin-bottom: 2rem; background: rgba(255,255,255,0.03); padding: 1.5rem; border-radius: 12px;">
+                <p class="text-muted" style="margin-bottom: 0.5rem;">You are voting for</p>
+                <h2 id="confirm-candidate-name" style="color: var(--primary);"></h2>
+                <p class="text-muted" style="font-size: 0.8rem; margin-top: 1rem;">This action cannot be undone.</p>
+            </div>
+
+            <form id="confirm-form">
+                <div class="form-group hidden">
+                    <input type="text" id="confirm-regNum" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Enter Password to Confirm</label>
+                    <input type="password" id="confirm-password" required placeholder="Your Password"
+                        style="text-align: center;">
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="submit-btn"
+                        style="background: transparent; border: 1px solid var(--glass-border);"
+                        onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="submit-btn">Confirm Vote</button>
+                </div>
+            </form>
+            <p id="modal-error" class="text-danger text-center mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <script>
+        const currentUser = StorageManager.getCurrentUser();
+        if (!currentUser || currentUser.role !== 'voter') {
+            window.location.href = 'login.html';
+        }
+
+        document.getElementById('user-name').innerText = `Welcome, ${currentUser.name}`;
+
+        let selectedCandidateId = null;
+        let candidates = [];
+
+        async function init() {
+            try {
+                // Fetch status and CANDIDATES (Securely)
+                const election = await StorageManager.getElectionStatus();
+                // Check if voted - Trust session or fetch fresh user?
+                // For simplicity and speed, trust session if updated correctly, but let's re-fetch self to be safe against multi-device.
+                // Since we don't have getSelf endpoint, we rely on currentUser from localStorage which is updated by vote().
+                // To be extra safe, we could re-login or fetchUser(id).
+                // Let's stick to currentUser for now as it's sufficient for this scope.
+
+                const statusHeader = document.getElementById('election-status-header');
+                const statusDesc = document.getElementById('election-status-desc');
+                const votingSection = document.getElementById('voting-section');
+                const votedSection = document.getElementById('voted-section');
+
+                // 1. Check if voted
+                if (currentUser.hasVoted) {
+                    statusHeader.innerText = "Vote Cast";
+                    statusDesc.innerText = "Thank you for participating.";
+                    votedSection.classList.remove('hidden');
+
+                    // Resolve voted candidate name
+                    // We need the list of candidates to map ID to Name
+                    const candidatesList = await StorageManager.getCandidates();
+                    const cand = candidatesList.find(c => c.regNum === currentUser.votedFor);
+                    const votedName = cand ? `${cand.name} (${cand.symbol})` : currentUser.votedFor;
+
+                    document.getElementById('voted-candidate-name').innerText = votedName;
+                    return;
+                }
+
+                // 2. Election Active?
+                if (election.isActive) {
+                    statusHeader.innerText = "Active Election";
+                    statusHeader.className = "text-success";
+                    statusDesc.innerText = "Polls are open. Select a candidate below.";
+
+                    const candidatesList = await StorageManager.getCandidates();
+                    renderCandidates(candidatesList);
+
+                    votingSection.classList.remove('hidden');
+                } else {
+                    statusHeader.innerText = "Election Closed";
+                    statusHeader.className = "text-danger";
+                    statusDesc.innerText = "Voting is currently not available.";
+                }
+            } catch (err) {
+                console.error(err);
+                document.getElementById('election-status-header').innerText = "Connection Error";
+                document.getElementById('election-status-desc').innerText = "Is the server running?";
+            }
+        }
+
+        function renderCandidates(contestantsList) {
+            candidates = contestantsList;
+            const grid = document.getElementById('candidates-grid');
+            grid.innerHTML = '';
+
+            candidates.forEach(c => {
+                const card = document.createElement('div');
+                card.className = 'candidate-card';
+                card.onclick = () => selectCandidate(c.regNum);
+                card.id = `card-${c.regNum}`;
+
+                // Portrait Logic
+                let portraitHtml = '<div style="width:80px;height:80px;background:rgba(255,255,255,0.05);border-radius:50%;margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;font-size:2.5rem;">👤</div>';
+                if (c.portrait) {
+                    if (c.portrait.startsWith('data:image')) {
+                        portraitHtml = `<img src="${c.portrait}" style="width:80px;height:80px;border-radius:50%;margin:0 auto 1rem;object-fit:cover;border:2px solid var(--primary);box-shadow: 0 0 15px rgba(79,70,229,0.3);">`;
+                    } else if (c.portrait.startsWith('data:application/pdf')) {
+                        portraitHtml = '<div style="width:80px;height:80px;background:rgba(239,68,68,0.1);border-radius:50%;margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;font-size:2rem;border:2px solid var(--danger);">📄</div>';
+                    }
+                }
+
+                card.innerHTML = `
+                    ${portraitHtml}
+                    <div class="symbol">${c.symbol}</div>
+                    <h3 style="margin-bottom: 0.5rem; font-size:1.2rem;">${c.name}</h3>
+                    <p class="text-muted" style="font-size: 0.9rem;">${c.branch || ''} ${c.year ? 'Year ' + c.year : ''}</p>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function selectCandidate(regNum) {
+            selectedCandidateId = regNum;
+            document.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('selected'));
+            document.getElementById(`card-${regNum}`).classList.add('selected');
+            document.getElementById('vote-btn').classList.remove('hidden');
+        }
+
+        document.getElementById('vote-btn').addEventListener('click', () => {
+            // ... Modal logic same ...
+            if (!selectedCandidateId) return;
+            const modal = document.getElementById('confirm-modal');
+            const cand = candidates.find(c => c.regNum === selectedCandidateId);
+
+            document.getElementById('confirm-candidate-name').innerText = cand.name;
+            document.getElementById('confirm-regNum').value = currentUser.regNum;
+            modal.classList.add('visible');
+        });
+
+        function closeModal() {
+            document.getElementById('confirm-modal').classList.remove('visible');
+            document.getElementById('confirm-password').value = '';
+            document.getElementById('modal-error').classList.add('hidden');
+        }
+
+        // ASYNC Confirmation
+        document.getElementById('confirm-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('confirm-password').value;
+
+            if (password !== currentUser.password) {
+                const err = document.getElementById('modal-error');
+                err.innerText = "Incorrect Password";
+                err.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                // Vote call
+                await StorageManager.vote(currentUser.regNum, selectedCandidateId);
+
+                closeModal();
+                setTimeout(() => window.location.reload(), 300);
+            } catch (err) {
+                alert("Error casting vote: " + err.message);
+            }
+        });
+
+        document.getElementById('confirm-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'confirm-modal') closeModal();
+        });
+
+        init();
+    </script>
+</body>
+
+</html>

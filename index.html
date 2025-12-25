@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Premium Design Update -->
+    <title>OVS - Secure Election Portal</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="storage.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@300;400;600;700&display=swap"
+        rel="stylesheet">
+
+</head>
+
+<body>
+    <!-- Cinematic Intro Overlay -->
+    <div id="intro-overlay">
+        <div class="intro-content">
+            <h1 class="intro-text">YYRD <span class="highlight">Officials</span></h1>
+            <div class="loading-line"></div>
+        </div>
+    </div>
+
+    <nav class="hidden" id="main-nav">
+        <div class="brand">YYRD Official</div>
+        <div class="nav-links">
+            <!-- No direct buttons here, focus on center interaction -->
+        </div>
+    </nav>
+
+    <div class="container hero-section hidden" id="main-content">
+        <h1
+            style="font-size: 4.5rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.1; font-family: var(--font-heading); text-shadow: 0 0 30px rgba(99, 102, 241, 0.3);">
+            YYRD Official<br>
+            <span
+                style="background: linear-gradient(to right, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.3));">Voting
+                Portal</span>
+        </h1>
+        <p
+            style="font-size: 1.25rem; color: var(--text-muted); max-width: 600px; margin-bottom: 3rem; line-height: 1.6;">
+            Empowering the future through secure, transparent, and democratic elections. <br>
+            <strong>Your Voice, Your Power.</strong>
+        </p>
+
+        <!-- Selection Path - Directly Visible with Animation -->
+        <div id="path-selector" class="path-cards">
+            <a href="register.html" class="role-card">
+                <div class="role-icon">📝</div>
+                <h3>Register</h3>
+                <p class="text-muted text-center mt-2">New Voter or Candidate? Start here.</p>
+            </a>
+
+            <a href="login.html" class="role-card">
+                <div class="role-icon">👤</div>
+                <h3>Voter Login</h3>
+                <p class="text-muted text-center mt-2">Cast your vote securely.</p>
+            </a>
+
+            <a href="login.html?admin=true" class="role-card">
+                <div class="role-icon">🛡️</div>
+                <h3>Admin Portal</h3>
+                <p class="text-muted text-center mt-2">Manage elections.</p>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Cinematic Intro Logic
+        window.addEventListener('load', () => {
+            const overlay = document.getElementById('intro-overlay');
+            const nav = document.getElementById('main-nav');
+            const content = document.getElementById('main-content');
+
+            setTimeout(() => {
+                overlay.classList.add('fade-out');
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                    nav.classList.remove('hidden');
+                    nav.classList.add('animate-fade-in');
+                    content.classList.remove('hidden');
+                    content.classList.add('animate-up');
+
+                    // Stagger cards
+                    const cards = document.querySelectorAll('.role-card');
+                    cards.forEach((card, index) => {
+                        setTimeout(() => {
+                            card.classList.add('visible');
+                        }, 100 * (index + 1));
+                    });
+                }, 1000);
+            }, 2500); // Duration of intro
+        });
+    </script>
+</body>
+
+</html>
